@@ -1,0 +1,28 @@
+{
+  "id": "ypf_noc_iade",
+  "name": "YPF NOC - IADE (Reparaciones de Equipos)",
+  "template_type": "ypf_noc_iade",
+  "calc_mode": "fijo",
+  "description": "Plantilla para IADE de YPF NOC con desglose de repuestos, mano de obra y detalle de avería.",
+  "default_metadata": {
+    "titulo": "REPARACIONES DE EQUIPOS",
+    "contrato_sap": "4900102848",
+    "almacen": "NOC",
+    "subtotal_label": "SUBTOTOTAL"
+  },
+  "options": {
+    "show_tariffs": true,
+    "show_signature": false,
+    "show_observations": false
+  },
+  "columns": [
+    {"key": "iade", "title": "IADE", "visible": true, "width_ratio": 1.2, "align": "CENTER"},
+    {"key": "equipo", "title": "EQUIPO", "visible": true, "width_ratio": 2.2, "align": "LEFT"},
+    {"key": "interno", "title": "INTERNO", "visible": true, "width_ratio": 1.1, "align": "CENTER"},
+    {"key": "almacen", "title": "ALMACEN", "visible": true, "width_ratio": 1.0, "align": "CENTER"},
+    {"key": "repuestos_usd", "title": "REPUESTOS (USD)", "visible": true, "width_ratio": 1.5, "align": "RIGHT"},
+    {"key": "mo_usd", "title": "MANO DE OBRA Y REPARACIONES (USD)", "visible": true, "width_ratio": 1.8, "align": "RIGHT"},
+    {"key": "total_rep_mo", "title": "TOTAL REP.+ MO", "visible": true, "width_ratio": 1.6, "align": "RIGHT"},
+    {"key": "detalle", "title": "DETALLE", "visible": true, "width_ratio": 3.4, "align": "LEFT"}
+  ]
+}

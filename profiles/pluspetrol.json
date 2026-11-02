@@ -1,0 +1,33 @@
+{
+  "id": "pluspetrol",
+  "name": "Pluspetrol - Certificado de Alquiler",
+  "template_type": "pluspetrol",
+  "calc_mode": "diario",
+  "description": "Plantilla para Pluspetrol con desglose de días, fechas, tarifas diarias y tabla opcional de otros cargos.",
+  "default_metadata": {
+    "cliente": "PLUSPETROL S.A.",
+    "obra": "Yacimiento La Calera",
+    "periodo": "01/10/2026 al 31/10/2026",
+    "oc_np": "4500987621",
+    "certificado_nro": "112",
+    "observacion": "El servicio de alquiler incluye mantenimiento preventivo estándar en campo según especificaciones técnicas."
+  },
+  "options": {
+    "show_tariffs": true,
+    "show_dates": true,
+    "show_signature": true,
+    "show_observations": true,
+    "include_other_charges": true
+  },
+  "columns": [
+    {"key": "equipo", "title": "EQUIPO", "visible": true, "width_ratio": 2.5, "align": "LEFT"},
+    {"key": "marca", "title": "MARCA", "visible": true, "width_ratio": 1.1, "align": "CENTER"},
+    {"key": "modelo", "title": "MODELO", "visible": true, "width_ratio": 1.1, "align": "CENTER"},
+    {"key": "interno", "title": "INTERNO", "visible": true, "width_ratio": 1.1, "align": "CENTER"},
+    {"key": "cant_dias", "title": "CANT DIAS", "visible": true, "width_ratio": 1.1, "align": "CENTER"},
+    {"key": "inicio_periodo", "title": "INICIO PERIODO", "visible": true, "width_ratio": 1.3, "align": "CENTER"},
+    {"key": "fin_periodo", "title": "FIN PERIODO", "visible": true, "width_ratio": 1.3, "align": "CENTER"},
+    {"key": "tarifa_diario", "title": "TARIFA DIARIO", "visible": true, "width_ratio": 1.3, "align": "RIGHT"},
+    {"key": "tarifa_total", "title": "TARIFA TOTAL (USD)", "visible": true, "width_ratio": 1.6, "align": "RIGHT"}
+  ]
+}

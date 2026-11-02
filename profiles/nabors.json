@@ -1,0 +1,32 @@
+{
+  "id": "nabors",
+  "name": "Nabors - Certificación de Servicios",
+  "template_type": "nabors",
+  "calc_mode": "diario",
+  "description": "Plantilla para Nabors con tabla dinámica (opción de mostrar fechas INICIO/FIN y días de alquiler).",
+  "default_metadata": {
+    "cliente": "NABORS",
+    "servicio": "F36",
+    "oc_np": "19084416",
+    "certificado_nro": "45",
+    "sucursal": "Sucursal NQN y Valle",
+    "direccion": "Industriales Neuquinos 2920, PIN",
+    "telefono": "T:[0299] 4782500",
+    "observacion": ""
+  },
+  "options": {
+    "show_dates": false,
+    "show_tariffs": false,
+    "show_signature": true,
+    "show_observations": true
+  },
+  "columns": [
+    {"key": "equipo", "title": "EQUIPO", "visible": true, "width_ratio": 3.0, "align": "LEFT"},
+    {"key": "marca", "title": "MARCA", "visible": true, "width_ratio": 1.2, "align": "CENTER"},
+    {"key": "modelo", "title": "MODELO", "visible": true, "width_ratio": 1.2, "align": "CENTER"},
+    {"key": "inicio", "title": "INICIO", "visible": false, "width_ratio": 1.3, "align": "CENTER"},
+    {"key": "fin", "title": "FIN", "visible": false, "width_ratio": 1.3, "align": "CENTER"},
+    {"key": "dias_alq", "title": "DÍAS ALQ", "visible": true, "width_ratio": 1.2, "align": "CENTER"},
+    {"key": "cant_equipos", "title": "CANT EQUIPOS", "visible": true, "width_ratio": 1.5, "align": "CENTER"}
+  ]
+}

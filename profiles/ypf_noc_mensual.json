@@ -1,0 +1,29 @@
+{
+  "id": "ypf_noc_mensual",
+  "name": "YPF NOC - Mensual / Plataformas",
+  "template_type": "ypf_noc_mensual",
+  "calc_mode": "mensual",
+  "description": "Plantilla mensual para YPF NOC con deducciones por fuera de servicio en observaciones.",
+  "default_metadata": {
+    "titulo": "SERVICIO ALQUILER DE EQUIPOS",
+    "contrato_sap": "4900114308",
+    "almacen": "NOC",
+    "periodo": "21/09/2026 al 20/10/2026",
+    "observaciones": "21/09 rca por fuera de servicio E040204 + A040171 x E040205 + A040164 Entrega 22/09 - 1 día bonif.\n25/09 rca por fuera de servico E040207 x E040188 - Entrega 13/10 - 18 días bonif.\n10/10 rca por fuera de servicio E040172 x E040179 - Entrega 12/10 - 2 días bonif."
+  },
+  "options": {
+    "show_tariffs": true,
+    "show_observations": true,
+    "show_signature": false
+  },
+  "columns": [
+    {"key": "posicion", "title": "POSICIÓN", "visible": true, "width_ratio": 1.1, "align": "CENTER"},
+    {"key": "linea", "title": "LINEA", "visible": true, "width_ratio": 0.9, "align": "CENTER"},
+    {"key": "um", "title": "U.M", "visible": true, "width_ratio": 0.9, "align": "CENTER"},
+    {"key": "descripcion", "title": "DESCRIPCION", "visible": true, "width_ratio": 4.5, "align": "LEFT"},
+    {"key": "periodo", "title": "PERIODO", "visible": true, "width_ratio": 1.3, "align": "CENTER"},
+    {"key": "cantidad", "title": "CANTIDAD", "visible": true, "width_ratio": 1.2, "align": "RIGHT"},
+    {"key": "tarifa", "title": "TARIFA", "visible": true, "width_ratio": 1.3, "align": "RIGHT"},
+    {"key": "total", "title": "TOTAL", "visible": true, "width_ratio": 1.5, "align": "RIGHT"}
+  ]
+}
