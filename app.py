@@ -333,9 +333,9 @@ with tab_cert:
     # Obtener DataFrame: si no hay datos, inicializar VACÍO (no precargar datos)
     if data_key not in st.session_state:
         target_cols = [c.get("title") for c in active_profile.get("columns", [])]
-        empty_dict = {"_incluir": []}
+        empty_dict = {"_incluir": pd.Series(dtype=bool)}
         for c in target_cols:
-            empty_dict[c] = []
+            empty_dict[c] = pd.Series(dtype=object)
         st.session_state[data_key] = pd.DataFrame(empty_dict)
 
     current_df = st.session_state.get(data_key, pd.DataFrame())
@@ -364,11 +364,20 @@ with tab_cert:
     with col_act3:
         if st.button("🗑️ Limpiar Planilla", use_container_width=True):
             target_cols = [c.get("title") for c in active_profile.get("columns", [])]
-            empty_dict = {"_incluir": []}
+            empty_dict = {"_incluir": pd.Series(dtype=bool)}
             for c in target_cols:
-                empty_dict[c] = []
+                empty_dict[c] = pd.Series(dtype=object)
             st.session_state[data_key] = pd.DataFrame(empty_dict)
             st.rerun()
+
+    # Asegurar tipo booleano estricto en '_incluir' para evitar StreamlitAPIException en CheckboxColumn
+    if "_incluir" not in current_df.columns:
+        current_df.insert(0, "_incluir", pd.Series(True, index=current_df.index, dtype=bool))
+    else:
+        current_df["_incluir"] = current_df["_incluir"].fillna(True).astype(bool)
+    
+    # Sanitizar explícitamente el session_state para purgar cualquier residuo de float de sesiones previas
+    st.session_state[data_key] = current_df
 
     # Editor de datos interactivo
     edited_df = st.data_editor(
@@ -821,6 +830,8 @@ with tab_perfiles:
 
             st.markdown("##### Columnas a Renderizar en el Certificado")
             cols_df = pd.DataFrame(target_prof_data.get("columns", []))
+            if "visible" in cols_df.columns:
+                cols_df["visible"] = cols_df["visible"].fillna(True).astype(bool)
             edited_cols_df = st.data_editor(
                 cols_df,
                 num_rows="dynamic",
