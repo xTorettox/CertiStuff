@@ -101,20 +101,42 @@ class PluspetrolPDFGenerator(BasePDFGenerator):
         story.append(Spacer(1, 12))
 
         # 2. TABLA PRINCIPAL DE EQUIPOS
-        col_names = [
-            "EQUIPO",
-            "MARCA",
-            "MODELO",
-            "INTERNO",
-            "CANT DIAS",
-            "INICIO PERIODO",
-            "FIN PERIODO",
-            "TARIFA DIARIO",
-            "TARIFA TOTAL (USD)"
-        ]
-        weights = [0.22, 0.10, 0.10, 0.08, 0.08, 0.10, 0.10, 0.10, 0.12]
-        col_widths = [available_width * w for w in weights]
+        # Determinar si se muestran fechas y tarifas según opciones y si los datos contienen valores válidos
+        show_dates_opt = options.get("show_dates", True)
+        has_dates = False
+        for _, r in df_data.iterrows():
+            ini = str(r.get("INICIO PERIODO", r.get("INICIO", "")) or "").strip()
+            fin = str(r.get("FIN PERIODO", r.get("FIN", "")) or "").strip()
+            if ini not in ["", "-", "nan", "None"] or fin not in ["", "-", "nan", "None"]:
+                has_dates = True
+                break
+        show_dates = show_dates_opt and has_dates
 
+        show_tariffs_opt = options.get("show_tariffs", True)
+        has_tariffs = False
+        for _, r in df_data.iterrows():
+            t_d = parse_arg_number(r.get("TARIFA DIARIO", r.get("TARIFA", 0)))
+            t_tot = parse_arg_number(r.get("TARIFA TOTAL (USD)", r.get("TOTAL", 0)))
+            if t_d > 0 or t_tot > 0:
+                has_tariffs = True
+                break
+        show_tariffs = show_tariffs_opt and has_tariffs
+
+        # Construir columnas y proporciones dinámicamente
+        if show_dates and show_tariffs:
+            col_names = ["EQUIPO", "MARCA", "MODELO", "INTERNO", "CANT DIAS", "INICIO PERIODO", "FIN PERIODO", "TARIFA DIARIO", "TARIFA TOTAL (USD)"]
+            weights = [0.22, 0.10, 0.10, 0.08, 0.08, 0.10, 0.10, 0.10, 0.12]
+        elif show_dates and not show_tariffs:
+            col_names = ["EQUIPO", "MARCA", "MODELO", "INTERNO", "CANT DIAS", "INICIO PERIODO", "FIN PERIODO"]
+            weights = [0.34, 0.13, 0.13, 0.10, 0.10, 0.10, 0.10]
+        elif not show_dates and show_tariffs:
+            col_names = ["EQUIPO", "MARCA", "MODELO", "INTERNO", "CANT DIAS", "TARIFA DIARIO", "TARIFA TOTAL (USD)"]
+            weights = [0.34, 0.13, 0.13, 0.10, 0.10, 0.10, 0.10]
+        else:
+            col_names = ["EQUIPO", "MARCA", "MODELO", "INTERNO", "CANT DIAS"]
+            weights = [0.44, 0.16, 0.16, 0.12, 0.12]
+
+        col_widths = [available_width * w for w in weights]
         header_cells = [Paragraph(f"<b>{col}</b>", self.style_th_black_center) for col in col_names]
         table_rows = [header_cells]
 
@@ -148,11 +170,14 @@ class PluspetrolPDFGenerator(BasePDFGenerator):
                 self.format_cell(mod, align="CENTER"),
                 self.format_cell(interno, align="CENTER"),
                 self.format_cell(str(dias_val), align="CENTER"),
-                self.format_cell(inicio, align="CENTER"),
-                self.format_cell(fin, align="CENTER"),
-                self.format_cell(format_arg_currency(tarifa_d, symbol="", include_symbol=False), align="RIGHT"),
-                self.format_cell(format_arg_currency(tot_item, symbol="USD"), align="RIGHT"),
             ]
+            if show_dates:
+                row_cells.append(self.format_cell(inicio, align="CENTER"))
+                row_cells.append(self.format_cell(fin, align="CENTER"))
+            if show_tariffs:
+                row_cells.append(self.format_cell(format_arg_currency(tarifa_d, symbol="", include_symbol=False), align="RIGHT"))
+                row_cells.append(self.format_cell(format_arg_currency(tot_item, symbol="USD"), align="RIGHT"))
+
             table_rows.append(row_cells)
 
         if len(table_rows) == 1:
@@ -212,29 +237,42 @@ class PluspetrolPDFGenerator(BasePDFGenerator):
         # 4. CUADRO RESUMEN DE TOTALES Y PIE CON FIRMA
         total_final = total_equipos + total_otros_cargos
 
-        # Cuadro de totales a la derecha
-        summary_rows = [
-            [Paragraph("Subtotal Equipos:", self.style_cell_left), Paragraph(format_arg_currency(total_equipos, symbol="USD"), self.style_cell_bold_right)],
-        ]
-        if include_other_charges and total_otros_cargos > 0:
-            summary_rows.append([Paragraph("Subtotal Otros Cargos:", self.style_cell_left), Paragraph(format_arg_currency(total_otros_cargos, symbol="USD"), self.style_cell_bold_right)])
-        summary_rows.append([Paragraph("<b>TOTAL GENERAL (USD):</b>", self.style_cell_bold_left), Paragraph(f"<b>{format_arg_currency(total_final, symbol='USD')}</b>", self.style_cell_bold_right)])
+        # Cuadro de totales a la derecha (solo si show_tariffs está activo)
+        if show_tariffs:
+            summary_rows = [
+                [Paragraph("Subtotal Equipos:", self.style_cell_left), Paragraph(format_arg_currency(total_equipos, symbol="USD"), self.style_cell_bold_right)],
+            ]
+            if include_other_charges and total_otros_cargos > 0:
+                summary_rows.append([Paragraph("Subtotal Otros Cargos:", self.style_cell_left), Paragraph(format_arg_currency(total_otros_cargos, symbol="USD"), self.style_cell_bold_right)])
+            summary_rows.append([Paragraph("<b>TOTAL GENERAL (USD):</b>", self.style_cell_bold_left), Paragraph(f"<b>{format_arg_currency(total_final, symbol='USD')}</b>", self.style_cell_bold_right)])
 
-        t_summary = Table(summary_rows, colWidths=[130, 110])
-        t_summary.setStyle(TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#E2E8F0")),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ]))
+            t_summary = Table(summary_rows, colWidths=[130, 110])
+            t_summary.setStyle(TableStyle([
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#E2E8F0")),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            summary_w = 240
+        else:
+            t_summary = Paragraph("", self.style_normal)
+            summary_w = 10
 
         # Observaciones a la izquierda
         obs_text = metadata.get("observacion", "")
-        obs_box = [
-            Paragraph("<b>Observaciones:</b>", style_meta_label),
-            Spacer(1, 2),
-            Paragraph(obs_text if obs_text else "-", self.style_cell_left)
-        ]
+        show_obs = options.get("show_observations", True)
+        clean_obs = str(obs_text).strip() if obs_text and not pd.isna(obs_text) else ""
+        if clean_obs.lower() in ["nan", "none", "null", "-"]:
+            clean_obs = ""
+
+        if show_obs and clean_obs:
+            obs_box = [
+                Paragraph("<b>Observaciones:</b>", style_meta_label),
+                Spacer(1, 2),
+                Paragraph(clean_obs, self.style_cell_left)
+            ]
+        else:
+            obs_box = Paragraph("", self.style_normal)
 
         # Bloque de firma
         signer_name = metadata.get("firmante_nombre", "Federico García Cendra")
@@ -245,7 +283,7 @@ class PluspetrolPDFGenerator(BasePDFGenerator):
 
         bottom_table = Table(
             [[obs_box, sig_flowable, t_summary]],
-            colWidths=[available_width - 400, 160, 240]
+            colWidths=[available_width - 160 - summary_w, 160, summary_w]
         )
         bottom_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (0, 0), 'TOP'),

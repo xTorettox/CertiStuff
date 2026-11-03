@@ -27,6 +27,43 @@ BULK_COLUMNS = [
     "OBSERVACION"
 ]
 
+STD_MAPPING = {
+    "CLIENTE": "CLIENTE",
+    "CERTIFICADO": "CERTIFICADO_NRO",
+    "CERTIFICADO_NRO": "CERTIFICADO_NRO",
+    "NRO_CERTIFICADO": "CERTIFICADO_NRO",
+    "CERT": "CERTIFICADO_NRO",
+    "SERVICIO": "SERVICIO_OBRA",
+    "SERVICIO_OBRA": "SERVICIO_OBRA",
+    "OBRA": "SERVICIO_OBRA",
+    "OC": "OC_NP",
+    "NP": "OC_NP",
+    "OC_NP": "OC_NP",
+    "OC/NP": "OC_NP",
+    "EQUIPO": "EQUIPO",
+    "MARCA": "MARCA",
+    "MODELO": "MODELO",
+    "INICIO": "INICIO",
+    "DESDE": "INICIO",
+    "FIN": "FIN",
+    "HASTA": "FIN",
+    "DIAS": "DIAS_ALQ",
+    "DIAS_ALQ": "DIAS_ALQ",
+    "CANT_DIAS": "DIAS_ALQ",
+    "CANTIDAD": "CANT_EQUIPOS",
+    "CANT_EQUIPOS": "CANT_EQUIPOS",
+    "CANT_EQ": "CANT_EQUIPOS",
+    "CANT": "CANT_EQUIPOS",
+    "MODALIDAD": "MODALIDAD",
+    "TARIFA": "TARIFA",
+    "TARIFA_UNIT": "TARIFA",
+    "TOTAL": "TOTAL",
+    "TARIFA_TOTAL": "TOTAL",
+    "OBSERVACION": "OBSERVACION",
+    "OBSERVACIONES": "OBSERVACION",
+    "OBS": "OBSERVACION"
+}
+
 def generate_bulk_excel_template() -> bytes:
     """Genera una plantilla Excel lista para carga masiva con datos de ejemplo y modalidades."""
     sample_rows = [
@@ -94,29 +131,46 @@ def process_bulk_excel(
     signer_name: str = "Federico García Cendra",
     signer_role: str = "Comercial Alquileres",
     signature_source: Optional[str] = None,
-    user_name: str = "comercial"
+    user_name: str = "comercial",
+    options: Optional[Dict[str, Any]] = None
 ) -> Tuple[bytes, List[Dict[str, Any]]]:
     """
-    Procesa un archivo Excel con múltiples filas/certificados y devuelve:
+    Procesa un archivo Excel/CSV con múltiples filas/certificados y devuelve:
     1. Archivo ZIP en bytes conteniendo los PDFs individuales recortados y el reporte Excel.
     2. Lista de resúmenes de certificados generados.
     """
-    df = pd.read_excel(file_bytes_or_path)
+    # Soporte tanto para Excel (.xlsx/.xls) como CSV
+    try:
+        df = pd.read_excel(file_bytes_or_path)
+    except Exception:
+        if hasattr(file_bytes_or_path, "seek"):
+            file_bytes_or_path.seek(0)
+        df = pd.read_csv(file_bytes_or_path)
 
-    # Normalizar columnas
+    # Normalizar columnas con prioridad exacta
     col_mapping = {}
     for col in df.columns:
         c_clean = str(col).upper().strip().replace(" ", "_").replace(".", "").replace("/", "_")
-        for std_col in BULK_COLUMNS:
-            if std_col in c_clean or c_clean in std_col:
-                col_mapping[col] = std_col
-                break
+        if c_clean in STD_MAPPING:
+            col_mapping[col] = STD_MAPPING[c_clean]
+        elif c_clean in BULK_COLUMNS:
+            col_mapping[col] = c_clean
+        else:
+            for std_col in BULK_COLUMNS:
+                if std_col == c_clean:
+                    col_mapping[col] = std_col
+                    break
     df = df.rename(columns=col_mapping)
 
-    # Asegurar columnas obligatorias
+    # Asegurar columnas obligatorias con defaults correctos (CANT_EQUIPOS por defecto 1, no 0)
     for col in BULK_COLUMNS:
         if col not in df.columns:
-            df[col] = "-" if "OBS" in col or "MARCA" in col or "MODELO" in col else 0
+            if "OBS" in col or "MARCA" in col or "MODELO" in col:
+                df[col] = "-"
+            elif col in ["CANT_EQUIPOS", "CANTIDAD"]:
+                df[col] = 1
+            else:
+                df[col] = ""
 
     # Limpiar fechas estrictamente a DD/MM/AAAA
     df["INICIO"] = df["INICIO"].apply(clean_date_val)
@@ -146,7 +200,13 @@ def process_bulk_excel(
             first_row = group_df.iloc[0]
             servicio_obra = str(first_row.get("SERVICIO_OBRA", first_row.get("SERVICIO", "-")))
             oc_np = str(first_row.get("OC_NP", "-"))
-            obs_text = str(first_row.get("OBSERVACION", ""))
+
+            # Limpieza estricta de observaciones (evitar que nan se muestre como texto "nan")
+            obs_raw = first_row.get("OBSERVACION")
+            if pd.isna(obs_raw) or str(obs_raw).strip().lower() in ["", "nan", "none", "null", "-"]:
+                obs_text = ""
+            else:
+                obs_text = str(obs_raw).strip()
 
             # Preparar DataFrame de equipos para la plantilla correspondiente
             cert_df = group_df.copy()
@@ -178,8 +238,8 @@ def process_bulk_excel(
                 "servicio": servicio_obra,
                 "obra": servicio_obra,
                 "oc_np": oc_np,
-                "observacion": obs_text if obs_text != "-" else "",
-                "observaciones": obs_text if obs_text != "-" else "",
+                "observacion": obs_text,
+                "observaciones": obs_text,
                 "periodo": f"{first_row.get('INICIO', '')} al {first_row.get('FIN', '')}",
                 "firmante_nombre": signer_name,
                 "firmante_cargo": signer_role,
@@ -189,18 +249,42 @@ def process_bulk_excel(
                 "telefono": cliente_info.get("telefono", "T:[0299] 4782500") if cliente_info else "T:[0299] 4782500",
             }
 
-            options = {
-                "show_dates": True,
-                "show_tariffs": True,
-                "show_signature": True,
-                "show_observations": bool(obs_text and obs_text != "-"),
+            # Opciones de renderizado heredadas del sidebar o default
+            base_opts = options.copy() if options else {}
+            cert_options = {
+                "show_dates": base_opts.get("show_dates", True),
+                "show_tariffs": base_opts.get("show_tariffs", True),
+                "show_signature": base_opts.get("show_signature", True),
+                "show_observations": base_opts.get("show_observations", True) and bool(obs_text),
                 "trim_frame": True
             }
+
+            # Si en la planilla las fechas están completamente en blanco, ocultar columnas de fechas
+            has_valid_dates = False
+            for _, r in cert_df.iterrows():
+                ini = str(r.get("INICIO", r.get("INICIO PERIODO", "")) or "").strip()
+                fin = str(r.get("FIN", r.get("FIN PERIODO", "")) or "").strip()
+                if ini not in ["", "-", "nan", "None"] or fin not in ["", "-", "nan", "None"]:
+                    has_valid_dates = True
+                    break
+            if not has_valid_dates:
+                cert_options["show_dates"] = False
+
+            # Si en la planilla las tarifas están completamente en blanco o 0, ocultar columnas de tarifas
+            has_valid_tariffs = False
+            for _, r in cert_df.iterrows():
+                tar = parse_arg_number(r.get("TARIFA", r.get("TARIFA DIARIO", 0)))
+                tot = parse_arg_number(r.get("TOTAL", r.get("TARIFA TOTAL (USD)", 0)))
+                if tar > 0 or tot > 0:
+                    has_valid_tariffs = True
+                    break
+            if not has_valid_tariffs:
+                cert_options["show_tariffs"] = False
 
             # Construir PDF
             generator = get_generator_by_template(template_type)
             pdf_buf = io.BytesIO()
-            pdf_bytes = generator.build_pdf(pdf_buf, metadata, cert_df, options)
+            pdf_bytes = generator.build_pdf(pdf_buf, metadata, cert_df, cert_options)
             
             # Recortar hoja física de forma automática
             pdf_bytes = crop_pdf_to_content(pdf_bytes, margin_bottom=24.0)

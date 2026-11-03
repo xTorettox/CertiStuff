@@ -135,7 +135,16 @@ class NaborsPDFGenerator(BasePDFGenerator):
         story.append(Spacer(1, 14))
 
         # 2. TABLA DINÁMICA DE EQUIPOS
-        show_dates = options.get("show_dates", False)
+        show_dates_opt = options.get("show_dates", True)
+        has_dates = False
+        for _, r in df_data.iterrows():
+            ini = str(r.get("INICIO", "") or "").strip()
+            fin = str(r.get("FIN", "") or "").strip()
+            if ini not in ["", "-", "nan", "None"] or fin not in ["", "-", "nan", "None"]:
+                has_dates = True
+                break
+        show_dates = show_dates_opt and has_dates
+
         if show_dates:
             col_headers = ["EQUIPO", "MARCA", "MODELO", "INICIO", "FIN", "DÍAS ALQ", "CANT EQUIPOS"]
             widths_prop = [0.34, 0.11, 0.11, 0.12, 0.12, 0.10, 0.10]
@@ -187,14 +196,22 @@ class NaborsPDFGenerator(BasePDFGenerator):
 
         # 3. SECCIÓN INFERIOR: Observaciones a la izquierda, Firma y Logo a la derecha
         obs_text = metadata.get("observacion", "")
+        show_obs = options.get("show_observations", True)
+        clean_obs = str(obs_text).strip() if obs_text and not pd.isna(obs_text) else ""
+        if clean_obs.lower() in ["nan", "none", "null", "-"]:
+            clean_obs = ""
+
         style_obs_label = ParagraphStyle("ObsLabel", parent=self.styles["Normal"], fontName="Helvetica-Bold", fontSize=9, leading=12)
         style_obs_text = ParagraphStyle("ObsText", parent=self.styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=11)
 
-        obs_flowable = [
-            Paragraph("<b>Observación:</b>", style_obs_label),
-            Spacer(1, 4),
-            Paragraph(obs_text if obs_text else "", style_obs_text)
-        ]
+        if show_obs and clean_obs:
+            obs_flowable = [
+                Paragraph("<b>Observación:</b>", style_obs_label),
+                Spacer(1, 4),
+                Paragraph(clean_obs, style_obs_text)
+            ]
+        else:
+            obs_flowable = Paragraph("", self.style_normal)
 
         # Bloque de firma
         signer_name = metadata.get("firmante_nombre", "Federico García Cendra")

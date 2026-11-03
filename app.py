@@ -558,12 +558,22 @@ with tab_bulk:
             if st.button("🚀 Procesar Certificados y Generar ZIP", type="primary", use_container_width=True):
                 with st.spinner("Generando certificados PDF y empaquetando en ZIP..."):
                     uploaded_bulk.seek(0)
+                    bulk_options = {
+                        "show_dates": show_dates,
+                        "show_tariffs": show_tariffs,
+                        "show_signature": show_signature,
+                        "show_observations": show_obs,
+                        "trim_frame": True
+                    }
+                    selected_sig_src = meta_inputs.get("firma_source")
                     zip_data, summary = process_bulk_excel(
                         uploaded_bulk,
                         default_modalidad=default_bulk_mod,
                         signer_name=bulk_signer_name,
                         signer_role=bulk_signer_role,
-                        user_name=current_username
+                        signature_source=selected_sig_src,
+                        user_name=current_username,
+                        options=bulk_options
                     )
 
                 st.success(f"🎉 Proceso completado: se generaron **{len(summary)} certificados** exitosamente.")
@@ -740,7 +750,7 @@ with tab_firma:
         
         with tab_subir:
             st.markdown("##### Subir Imagen de Firma")
-            st.caption("💡 Se eliminará automáticamente el fondo blanco del papel para que quede una firma transparente nítida.")
+            st.caption("💡 Se detectará automáticamente la transparencia si subes un archivo PNG, o se removerá el fondo blanco si es una foto de papel.")
             up_sig_file = st.file_uploader("Selecciona archivo de imagen:", type=["png", "jpg", "jpeg"], key="up_sig_user")
             
             sig_alias = st.text_input("Nombre / Alias de la Firma:", value="Firma Principal", key="sig_alias_input")
@@ -751,7 +761,8 @@ with tab_firma:
             if up_sig_file is not None:
                 orig_img = Image.open(up_sig_file)
                 clean_sig = make_transparent_signature(orig_img)
-                st.image(clean_sig, caption="Vista previa de firma con fondo transparente", width=220)
+                st.markdown("<p style='font-size: 0.85rem; color: #475569; margin-bottom: 4px;'><b>Vista previa de firma (sobre fondo blanco):</b></p>", unsafe_allow_html=True)
+                st.image(clean_sig, width=220)
 
                 if st.button("💾 Guardar en Mi Perfil", type="primary", key="btn_save_up_sig"):
                     b64_uri = pil_to_base64_data_uri(clean_sig)
@@ -763,6 +774,8 @@ with tab_firma:
                         firma_png_base64=b64_uri,
                         is_default=sig_make_def
                     )
+                    st.success("✅ Firma registrada y guardada exitosamente.")
+                    st.rerun()
                     st.success("✅ Firma registrada y guardada exitosamente.")
                     st.rerun()
 

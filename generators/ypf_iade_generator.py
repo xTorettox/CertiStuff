@@ -82,31 +82,41 @@ class YPFIADEPDFGenerator(BasePDFGenerator):
         story.append(Spacer(1, 14))
 
         # 2. TABLA IADE CON ENCABEZADO NEGRO Y TEXTO BLANCO
-        col_names = [
-            "IADE",
-            "EQUIPO",
-            "INTERNO",
-            "ALMACEN",
-            "REPUESTOS (USD)",
-            "MANO DE OBRA Y REPARACIONES (USD)",
-            "TOTAL REP.+ MO",
-            "DETALLE"
-        ]
-        
-        # Proporciones de columnas
-        weights = [0.09, 0.17, 0.08, 0.07, 0.12, 0.13, 0.12, 0.22]
-        col_widths = [available_width * w for w in weights]
+        show_tariffs_opt = options.get("show_tariffs", True)
+        has_tariffs = False
+        for _, r in df_data.iterrows():
+            r_num = parse_arg_number(r.get("REPUESTOS (USD)", 0))
+            m_num = parse_arg_number(r.get("MANO DE OBRA Y REPARACIONES (USD)", 0))
+            t_num = parse_arg_number(r.get("TOTAL REP.+ MO", 0))
+            if r_num > 0 or m_num > 0 or t_num > 0:
+                has_tariffs = True
+                break
+        show_tariffs = show_tariffs_opt and has_tariffs
 
-        header_cells = [
-            Paragraph(f"<b>{col_names[0]}</b>", self.style_th_white_center),
-            Paragraph(f"<b>{col_names[1]}</b>", self.style_th_white_center),
-            Paragraph(f"<b>{col_names[2]}</b>", self.style_th_white_center),
-            Paragraph(f"<b>{col_names[3]}</b>", self.style_th_white_center),
-            Paragraph(f"<b>{col_names[4]}</b>", self.style_th_white_center),
-            Paragraph(f"<b>{col_names[5]}</b>", self.style_th_white_center),
-            Paragraph(f"<b>{col_names[6]}</b>", self.style_th_white_center),
-            Paragraph(f"<b>{col_names[7]}</b>", self.style_th_white_center),
-        ]
+        if show_tariffs:
+            col_names = [
+                "IADE",
+                "EQUIPO",
+                "INTERNO",
+                "ALMACEN",
+                "REPUESTOS (USD)",
+                "MANO DE OBRA Y REPARACIONES (USD)",
+                "TOTAL REP.+ MO",
+                "DETALLE"
+            ]
+            weights = [0.09, 0.17, 0.08, 0.07, 0.12, 0.13, 0.12, 0.22]
+        else:
+            col_names = [
+                "IADE",
+                "EQUIPO",
+                "INTERNO",
+                "ALMACEN",
+                "DETALLE"
+            ]
+            weights = [0.12, 0.32, 0.12, 0.12, 0.32]
+        
+        col_widths = [available_width * w for w in weights]
+        header_cells = [Paragraph(f"<b>{c}</b>", self.style_th_white_center) for c in col_names]
         table_rows = [header_cells]
 
         total_general = 0.0
@@ -135,44 +145,53 @@ class YPFIADEPDFGenerator(BasePDFGenerator):
                 self.format_cell(equipo_val, align="LEFT"),
                 self.format_cell(interno_val, align="CENTER"),
                 self.format_cell(almacen_val, align="CENTER"),
-                self.format_cell(format_arg_currency(rep_num, symbol="USD"), align="RIGHT"),
-                self.format_cell(format_arg_currency(mo_num, symbol="USD"), align="RIGHT"),
-                self.format_cell(format_arg_currency(tot_num, symbol="USD"), align="RIGHT"),
-                self.format_cell(detalle_val, align="LEFT"),
             ]
+            if show_tariffs:
+                row_cells.append(self.format_cell(format_arg_currency(rep_num, symbol="USD"), align="RIGHT"))
+                row_cells.append(self.format_cell(format_arg_currency(mo_num, symbol="USD"), align="RIGHT"))
+                row_cells.append(self.format_cell(format_arg_currency(tot_num, symbol="USD"), align="RIGHT"))
+            row_cells.append(self.format_cell(detalle_val, align="LEFT"))
             table_rows.append(row_cells)
 
         # Fila vacía de resguardo
         if len(table_rows) == 1:
             table_rows.append([self.format_cell("-", align="CENTER") for _ in col_names])
 
-        # Fila de SUBTOTAL
-        subtotal_label = metadata.get("subtotal_label", "SUBTOTOTAL")
-        footer_cells = [
-            Paragraph(f"<b>{subtotal_label}</b>", self.style_cell_bold_right),
-            "", "", "", "", "", # Celdas que se fusionan
-            Paragraph("<b>USD</b>", self.style_cell_bold_center),
-            Paragraph(f"<b>{format_arg_currency(total_general, symbol='', include_symbol=False)}</b>", self.style_cell_bold_right)
-        ]
-        table_rows.append(footer_cells)
-        subtotal_row_idx = len(table_rows) - 1
+        # Fila de SUBTOTAL (solo si show_tariffs está activo)
+        if show_tariffs:
+            subtotal_label = metadata.get("subtotal_label", "SUBTOTOTAL")
+            footer_cells = [
+                Paragraph(f"<b>{subtotal_label}</b>", self.style_cell_bold_right),
+                "", "", "", "", "", # Celdas que se fusionan
+                Paragraph("<b>USD</b>", self.style_cell_bold_center),
+                Paragraph(f"<b>{format_arg_currency(total_general, symbol='', include_symbol=False)}</b>", self.style_cell_bold_right)
+            ]
+            table_rows.append(footer_cells)
+            subtotal_row_idx = len(table_rows) - 1
+            t_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, subtotal_row_idx - 1), 1, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('SPAN', (0, subtotal_row_idx), (5, subtotal_row_idx)),
+                ('GRID', (0, subtotal_row_idx), (-1, subtotal_row_idx), 1, colors.black),
+                ('BACKGROUND', (0, subtotal_row_idx), (-1, subtotal_row_idx), colors.HexColor("#F9FAFB")),
+            ]
+        else:
+            t_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.black),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]
 
-        # Construcción y estilo de la tabla
         iade_table = Table(table_rows, colWidths=col_widths)
-        t_style = [
-            # Encabezado negro
-            ('BACKGROUND', (0, 0), (-1, 0), colors.black),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, subtotal_row_idx - 1), 1, colors.black),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            # Fila de subtotal
-            ('SPAN', (0, subtotal_row_idx), (5, subtotal_row_idx)),
-            ('GRID', (0, subtotal_row_idx), (-1, subtotal_row_idx), 1, colors.black),
-            ('BACKGROUND', (0, subtotal_row_idx), (-1, subtotal_row_idx), colors.HexColor("#F9FAFB")),
-        ]
         iade_table.setStyle(TableStyle(t_style))
         story.append(iade_table)
 

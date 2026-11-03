@@ -272,7 +272,7 @@ class BasePDFGenerator(ABC):
         """Envuelve texto en un Paragraph para que no desborde las celdas de la tabla."""
         import re
         text_str = str(text) if text is not None else ""
-        if text_str == "" or text_str == "nan":
+        if text_str.strip().lower() in ["", "nan", "none", "null"]:
             text_str = "-"
         
         # Eliminar cualquier componente de hora residual

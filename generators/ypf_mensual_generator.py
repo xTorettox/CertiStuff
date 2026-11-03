@@ -94,20 +94,40 @@ class YPFMensualPDFGenerator(BasePDFGenerator):
         story.append(Spacer(1, 12))
 
         # 2. TABLA DE SERVICIOS
-        col_names = [
-            "POSICIÓN",
-            "LINEA",
-            "U.M",
-            "DESCRIPCION",
-            "PERIODO",
-            "CANTIDAD",
-            "TARIFA",
-            "TOTAL"
-        ]
-        # Proporciones
-        weights = [0.08, 0.07, 0.06, 0.38, 0.11, 0.09, 0.10, 0.11]
-        col_widths = [available_width * w for w in weights]
+        show_dates_opt = options.get("show_dates", True)
+        has_dates = False
+        for _, r in df_data.iterrows():
+            per_val = str(r.get("PERIODO", "") or "").strip()
+            if per_val not in ["", "-", "nan", "None"]:
+                has_dates = True
+                break
+        show_dates = show_dates_opt and has_dates
 
+        show_tariffs_opt = options.get("show_tariffs", True)
+        has_tariffs = False
+        for _, r in df_data.iterrows():
+            t_num = parse_arg_number(r.get("TARIFA", 0))
+            tot_num = parse_arg_number(r.get("TOTAL", 0))
+            if t_num > 0 or tot_num > 0:
+                has_tariffs = True
+                break
+        show_tariffs = show_tariffs_opt and has_tariffs
+
+        # Construir columnas dinámicamente
+        if show_dates and show_tariffs:
+            col_names = ["POSICIÓN", "LINEA", "U.M", "DESCRIPCION", "PERIODO", "CANTIDAD", "TARIFA", "TOTAL"]
+            weights = [0.08, 0.07, 0.06, 0.38, 0.11, 0.09, 0.10, 0.11]
+        elif show_dates and not show_tariffs:
+            col_names = ["POSICIÓN", "LINEA", "U.M", "DESCRIPCION", "PERIODO", "CANTIDAD"]
+            weights = [0.10, 0.09, 0.08, 0.50, 0.12, 0.11]
+        elif not show_dates and show_tariffs:
+            col_names = ["POSICIÓN", "LINEA", "U.M", "DESCRIPCION", "CANTIDAD", "TARIFA", "TOTAL"]
+            weights = [0.09, 0.08, 0.07, 0.44, 0.10, 0.11, 0.11]
+        else:
+            col_names = ["POSICIÓN", "LINEA", "U.M", "DESCRIPCION", "CANTIDAD"]
+            weights = [0.11, 0.10, 0.09, 0.58, 0.12]
+
+        col_widths = [available_width * w for w in weights]
         header_cells = [Paragraph(f"<b>{col}</b>", self.style_th_black_center) for col in col_names]
         table_rows = [header_cells]
 
@@ -142,41 +162,58 @@ class YPFMensualPDFGenerator(BasePDFGenerator):
                 self.format_cell(lin, align="CENTER"),
                 self.format_cell(um, align="CENTER"),
                 self.format_cell(desc, align="LEFT"),
-                self.format_cell(per, align="CENTER"),
-                self.format_cell(format_decimal(cant_num, decimals=3), align="RIGHT"),
-                self.format_cell(format_arg_currency(tarifa_num, symbol="", include_symbol=False), align="RIGHT"),
-                self.format_cell(format_decimal(tot_num, decimals=3), align="RIGHT")
             ]
+            if show_dates:
+                row_cells.append(self.format_cell(per, align="CENTER"))
+            row_cells.append(self.format_cell(format_decimal(cant_num, decimals=3), align="RIGHT"))
+            if show_tariffs:
+                row_cells.append(self.format_cell(format_arg_currency(tarifa_num, symbol="", include_symbol=False), align="RIGHT"))
+                row_cells.append(self.format_cell(format_decimal(tot_num, decimals=3), align="RIGHT"))
             table_rows.append(row_cells)
 
         if len(table_rows) == 1:
             table_rows.append([self.format_cell("-", align="CENTER") for _ in col_names])
 
-        # Fila del Subtotal / Total General USD (a la derecha)
-        total_cells = [
-            "", "", "", "", "", "",
-            Paragraph("<b>USD</b>", self.style_cell_bold_center),
-            Paragraph(f"<b>{format_arg_currency(total_general, symbol='', include_symbol=False)}</b>", self.style_cell_bold_right)
-        ]
-        table_rows.append(total_cells)
-        total_row_idx = len(table_rows) - 1
+        # Fila del Subtotal / Total General USD (solo si show_tariffs está activo)
+        if show_tariffs:
+            blank_cols_count = len(col_names) - 2
+            total_cells = ["" for _ in range(blank_cols_count)] + [
+                Paragraph("<b>USD</b>", self.style_cell_bold_center),
+                Paragraph(f"<b>{format_arg_currency(total_general, symbol='', include_symbol=False)}</b>", self.style_cell_bold_right)
+            ]
+            table_rows.append(total_cells)
+            total_row_idx = len(table_rows) - 1
 
-        mensual_table = Table(table_rows, colWidths=col_widths)
-        mensual_table.setStyle(TableStyle([
-            ('GRID', (0, 0), (-1, total_row_idx - 1), 1, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            # Total row styling
-            ('GRID', (6, total_row_idx), (7, total_row_idx), 1, colors.black),
-            ('BACKGROUND', (6, total_row_idx), (7, total_row_idx), colors.HexColor("#F9FAFB")),
-        ]))
+            mensual_table = Table(table_rows, colWidths=col_widths)
+            mensual_table.setStyle(TableStyle([
+                ('GRID', (0, 0), (-1, total_row_idx - 1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('GRID', (blank_cols_count, total_row_idx), (-1, total_row_idx), 1, colors.black),
+                ('BACKGROUND', (blank_cols_count, total_row_idx), (-1, total_row_idx), colors.HexColor("#F9FAFB")),
+            ]))
+        else:
+            mensual_table = Table(table_rows, colWidths=col_widths)
+            mensual_table.setStyle(TableStyle([
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+
         story.append(mensual_table)
         story.append(Spacer(1, 10))
 
         # 3. SECCIÓN DE OBSERVACIONES (Deducciones por fuera de servicio)
-        obs_text = metadata.get("observaciones", "")
+        obs_text = metadata.get("observaciones", metadata.get("observacion", ""))
+        show_obs = options.get("show_observations", True)
+        clean_obs = str(obs_text).strip() if obs_text and not pd.isna(obs_text) else ""
+        if clean_obs.lower() in ["nan", "none", "null", "-"]:
+            clean_obs = ""
+
         style_obs_title = ParagraphStyle(
             "YPF_ObsTitle",
             parent=self.styles["Normal"],
@@ -192,21 +229,22 @@ class YPFMensualPDFGenerator(BasePDFGenerator):
             leading=10.5
         )
 
-        obs_content = [Paragraph("<b>Obs:</b>", style_obs_title)]
-        if obs_text:
-            for line in obs_text.split("\n"):
+        if show_obs and clean_obs:
+            obs_content = [Paragraph("<b>Obs:</b>", style_obs_title)]
+            for line in clean_obs.split("\n"):
                 if line.strip():
                     obs_content.append(Paragraph(line.strip(), style_obs_body))
 
-        obs_box = Table([[obs_content]], colWidths=[available_width])
-        obs_box.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        story.append(obs_box)
+            obs_box = Table([[obs_content]], colWidths=[available_width])
+            obs_box.setStyle(TableStyle([
+                ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            story.append(obs_box)
+            story.append(Spacer(1, 8))
 
         # Si el usuario activa firma opcionalmente
         if options.get("show_signature", False):

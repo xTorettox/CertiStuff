@@ -7,21 +7,38 @@ from utils.database import db
 
 def make_transparent_signature(pil_img: Image.Image, threshold: int = 215) -> Image.Image:
     """
-    Convierte una imagen de firma sobre papel blanco en un PNG transparente nítido,
-    eliminando el fondo blanco o grisáceo y preservando la tinta original.
+    Convierte una imagen de firma en un PNG transparente nítido.
+    - Si la imagen ya tiene canal alpha con transparencia (como un PNG transparente subido por el usuario),
+      preserva la transparencia original sin alterar ningún pixel ni forzar fondo negro.
+    - Si es una foto/escaneo sobre papel blanco (JPG o PNG opaco), remueve el fondo blanco o grisáceo.
     """
-    img = pil_img.convert("RGBA")
+    img = pil_img.copy()
+
+    # 1. Detectar si la imagen ya cuenta con transparencia real
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        rgba = img.convert("RGBA")
+        alpha = rgba.split()[3]
+        min_a, max_a = alpha.getextrema()
+        # Si tiene píxeles con transparencia real (< 220), respetarla y preservarla al 100%
+        if min_a < 220:
+            return rgba
+
+    # 2. Si es una imagen opaca sobre papel, convertir a RGBA y remover fondo blanco
+    img = img.convert("RGBA")
     datas = img.getdata()
     new_data = []
     
     for item in datas:
         r, g, b, a = item
+        # Si ya era transparente, mantener transparente
+        if a < 50:
+            new_data.append((255, 255, 255, 0))
         # Si el pixel es cercano al blanco (fondo de papel), hacerlo transparente
-        if r > threshold and g > threshold and b > threshold:
+        elif r > threshold and g > threshold and b > threshold:
             new_data.append((255, 255, 255, 0))
         else:
-            # Preservar o intensificar la tinta
-            new_data.append((r, g, b, 255))
+            # Preservar la tinta con su color original
+            new_data.append((r, g, b, a if a > 0 else 255))
             
     img.putdata(new_data)
     return img
