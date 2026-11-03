@@ -240,7 +240,8 @@ class PluspetrolPDFGenerator(BasePDFGenerator):
         signer_name = metadata.get("firmante_nombre", "Federico García Cendra")
         signer_role = metadata.get("firmante_cargo", "Comercial Alquileres")
         show_sig = options.get("show_signature", True)
-        sig_flowable = self.get_signature_flowable(signer_name, signer_role, width=125, height=44) if show_sig else Paragraph("", self.style_normal)
+        sig_source = metadata.get("firma_source") or metadata.get("firma_base64")
+        sig_flowable = self.get_signature_flowable(signer_name, signer_role, width=125, height=44, sig_img_source=sig_source) if show_sig else Paragraph("", self.style_normal)
 
         bottom_table = Table(
             [[obs_box, sig_flowable, t_summary]],

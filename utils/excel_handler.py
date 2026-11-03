@@ -1,6 +1,7 @@
 import os
 import io
 import re
+import datetime
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional
 
@@ -39,6 +40,33 @@ def clean_col_name(col: str) -> str:
     c = c.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
     c = re.sub(r'[\(\)\.\,\_\-\/\\]', ' ', c)
     return " ".join(c.split())
+
+def clean_date_val(val: Any) -> str:
+    """Convierte cualquier fecha o timestamp a formato estricto DD/MM/AAAA sin hora."""
+    if pd.isna(val) or val is None or val == "" or val == "-":
+        return "-"
+    if isinstance(val, (pd.Timestamp, datetime.datetime, datetime.date)):
+        return val.strftime("%d/%m/%Y")
+    s = str(val).strip()
+    # Limpiar sufijos de hora comunes como 00:00:00 o T00:00:00
+    if " 00:00:00" in s:
+        s = s.replace(" 00:00:00", "").strip()
+    elif "T00:00:00" in s:
+        s = s.replace("T00:00:00", "").strip()
+    
+    # Si viene en formato ISO YYYY-MM-DD
+    m_iso = re.match(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[\sT].*)?$", s)
+    if m_iso:
+        y, mth, d = m_iso.groups()
+        return f"{int(d):02d}/{int(mth):02d}/{y}"
+    
+    # Si viene en formato DD/MM/YYYY con o sin hora
+    m_lat = re.match(r"^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[\sT].*)?$", s)
+    if m_lat:
+        d, mth, y = m_lat.groups()
+        return f"{int(d):02d}/{int(mth):02d}/{y}"
+        
+    return s
 
 def parse_arg_number(val: Any) -> float:
     """Parsea números en formato latino/argentino (ej: '1.808,80' o 'USD 1.808,80' o 1808.8)."""
@@ -118,7 +146,72 @@ def map_excel_columns(df: pd.DataFrame, target_columns: list) -> pd.DataFrame:
     else:
         df_clean["_incluir"] = df_clean["_incluir"].astype(bool)
 
+    # Limpiar y formatear fechas estrictamente sin hora (DD/MM/AAAA)
+    for col in df_clean.columns:
+        c_lower = str(col).lower()
+        if any(d_kw in c_lower for d_kw in ["inicio", "fin", "fecha", "desde", "hasta"]):
+            df_clean[col] = df_clean[col].apply(clean_date_val)
+
     return df_clean
+
+def auto_calculate_dataframe(df: pd.DataFrame, calc_mode: str = "diario") -> pd.DataFrame:
+    """
+    Realiza los cálculos matemáticos automáticos fila por fila en el DataFrame:
+    1. Si hay DÍAS y TARIFA -> completa TOTAL.
+    2. Si hay TOTAL y DÍAS pero falta TARIFA -> calcula TARIFA.
+    """
+    if df.empty:
+        return df
+
+    df_calc = df.copy()
+    for idx, row in df_calc.iterrows():
+        # Días
+        dias = parse_arg_number(row.get("DÍAS ALQ") or row.get("CANT DIAS") or row.get("DIAS") or 0)
+        # Cantidad de equipos
+        cant = parse_arg_number(row.get("CANT EQUIPOS") or row.get("CANTIDAD") or 1)
+        if cant <= 0:
+            cant = 1
+            
+        # Buscar tarifa y total
+        tarifa_col = None
+        for col in ["TARIFA DIARIO", "TARIFA", "TARIFA UNIT (USD)", "TARIFA MENSUAL"]:
+            if col in df_calc.columns:
+                tarifa_col = col
+                break
+                
+        total_col = None
+        for col in ["TARIFA TOTAL (USD)", "TOTAL", "TOTAL REP.+ MO", "SUBTOTAL (USD)"]:
+            if col in df_calc.columns:
+                total_col = col
+                break
+                
+        if tarifa_col and total_col:
+            tarifa_val = parse_arg_number(row.get(tarifa_col))
+            total_val = parse_arg_number(row.get(total_col))
+            
+            # Caso 1: Tiene tarifa y días pero total está en 0 o vacío
+            if tarifa_val > 0 and (total_val == 0 or pd.isna(total_val)):
+                if calc_mode == "diario" and dias > 0:
+                    df_calc.at[idx, total_col] = round(tarifa_val * dias * cant, 2)
+                elif calc_mode == "semanal" and dias > 0:
+                    df_calc.at[idx, total_col] = round((dias / 7.0) * tarifa_val * cant, 2)
+                elif calc_mode == "mensual":
+                    if 0 < cant < 1.0:
+                        df_calc.at[idx, total_col] = round(cant * tarifa_val, 2)
+                    elif dias > 0:
+                        df_calc.at[idx, total_col] = round((dias / 30.0) * tarifa_val * cant, 2)
+                    else:
+                        df_calc.at[idx, total_col] = round(cant * tarifa_val, 2)
+            # Caso 2: Tiene total y días pero tarifa está en 0
+            elif total_val > 0 and (tarifa_val == 0 or pd.isna(tarifa_val)) and dias > 0:
+                if calc_mode == "diario":
+                    df_calc.at[idx, tarifa_col] = round(total_val / (dias * cant), 2)
+                elif calc_mode == "semanal":
+                    df_calc.at[idx, tarifa_col] = round(total_val / ((dias / 7.0) * cant), 2)
+                elif calc_mode == "mensual":
+                    df_calc.at[idx, tarifa_col] = round(total_val / ((dias / 30.0) * cant), 2)
+                    
+    return df_calc
 
 def load_excel_file(file_bytes_or_path, profile: Dict[str, Any]) -> pd.DataFrame:
     """Lee un archivo Excel y lo adapta al perfil seleccionado."""

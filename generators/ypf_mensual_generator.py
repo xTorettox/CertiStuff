@@ -213,7 +213,9 @@ class YPFMensualPDFGenerator(BasePDFGenerator):
             story.append(Spacer(1, 10))
             signer_name = metadata.get("firmante_nombre", "Federico García Cendra")
             signer_role = metadata.get("firmante_cargo", "Comercial Alquileres")
-            sig_table = Table([[Paragraph("", self.style_normal), self.get_signature_flowable(signer_name, signer_role, width=130, height=48)]], colWidths=[available_width - 160, 160])
+            sig_source = metadata.get("firma_source") or metadata.get("firma_base64")
+            sig_flowable = self.get_signature_flowable(signer_name, signer_role, width=130, height=48, sig_img_source=sig_source)
+            sig_table = Table([[Paragraph("", self.style_normal), sig_flowable]], colWidths=[available_width - 160, 160])
             sig_table.setStyle(TableStyle([
                 ('ALIGN', (1, 0), (1, 0), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),

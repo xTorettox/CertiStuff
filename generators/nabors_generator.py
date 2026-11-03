@@ -200,8 +200,9 @@ class NaborsPDFGenerator(BasePDFGenerator):
         signer_name = metadata.get("firmante_nombre", "Federico García Cendra")
         signer_role = metadata.get("firmante_cargo", "Comercial Alquileres")
         show_sig = options.get("show_signature", True)
+        sig_source = metadata.get("firma_source") or metadata.get("firma_base64")
         
-        sig_flowable = self.get_signature_flowable(signer_name, signer_role, width=130, height=48) if show_sig else Paragraph("", self.style_normal)
+        sig_flowable = self.get_signature_flowable(signer_name, signer_role, width=130, height=48, sig_img_source=sig_source) if show_sig else Paragraph("", self.style_normal)
 
         # Logo a la derecha
         logo_flowable = self.get_logo_flowable(width=135, height=30)

@@ -219,20 +219,39 @@ class BasePDFGenerator(ABC):
         signer_name: str = "Federico García Cendra",
         signer_role: str = "Comercial Alquileres",
         width: float = 120,
-        height: float = 48
+        height: float = 48,
+        sig_img_source: Optional[Any] = None
     ) -> Table:
         """Crea un bloque de firma con la imagen escaneada y texto de aclaración."""
-        sig_path = self.get_signature_path()
         rows = []
-        if sig_path and os.path.exists(sig_path):
+        loaded_img = None
+        
+        # 1. Si se pasó una imagen en base64
+        if sig_img_source and isinstance(sig_img_source, str) and "base64," in sig_img_source:
             try:
-                img = RLImage(sig_path, width=width, height=height)
-                rows.append([img])
+                import base64
+                b64_data = sig_img_source.split("base64,")[1]
+                img_bytes = io.BytesIO(base64.b64decode(b64_data))
+                loaded_img = RLImage(img_bytes, width=width, height=height)
             except Exception as e:
-                print(f"Error cargando imagen de firma: {e}")
-                rows.append([""])
-        else:
-            rows.append([""])
+                print(f"Error cargando firma desde base64: {e}")
+        # 2. Si se pasó una ruta directa existente
+        elif sig_img_source and isinstance(sig_img_source, str) and os.path.exists(sig_img_source):
+            try:
+                loaded_img = RLImage(sig_img_source, width=width, height=height)
+            except Exception as e:
+                print(f"Error cargando firma desde ruta {sig_img_source}: {e}")
+        
+        # 3. Fallback a rutas predeterminadas en assets
+        if not loaded_img:
+            sig_path = self.get_signature_path()
+            if sig_path and os.path.exists(sig_path):
+                try:
+                    loaded_img = RLImage(sig_path, width=width, height=height)
+                except Exception as e:
+                    print(f"Error cargando firma default: {e}")
+
+        rows.append([loaded_img if loaded_img else ""])
 
         # Nombre y Cargo
         p_name = Paragraph(f"<b>{signer_name}</b>", self.style_cell_center)
@@ -251,9 +270,21 @@ class BasePDFGenerator(ABC):
 
     def format_cell(self, text: Any, align: str = "LEFT", bold: bool = False, textColor: Optional[colors.Color] = None) -> Paragraph:
         """Envuelve texto en un Paragraph para que no desborde las celdas de la tabla."""
+        import re
         text_str = str(text) if text is not None else ""
         if text_str == "" or text_str == "nan":
             text_str = "-"
+        
+        # Eliminar cualquier componente de hora residual
+        if " 00:00:00" in text_str:
+            text_str = text_str.replace(" 00:00:00", "").strip()
+        elif "T00:00:00" in text_str:
+            text_str = text_str.replace("T00:00:00", "").strip()
+            
+        m_iso = re.match(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$", text_str.strip())
+        if m_iso:
+            y, mth, d = m_iso.groups()
+            text_str = f"{int(d):02d}/{int(mth):02d}/{y}"
             
         if textColor == colors.white:
             style = self.style_th_white_center if align == "CENTER" else (self.style_th_white_right if align == "RIGHT" else self.style_th_white_left)
