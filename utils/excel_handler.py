@@ -142,9 +142,9 @@ def map_excel_columns(df: pd.DataFrame, target_columns: list) -> pd.DataFrame:
 
     # Asegurar columna de selección '_incluir'
     if "_incluir" not in df_clean.columns:
-        df_clean.insert(0, "_incluir", True)
+        df_clean.insert(0, "_incluir", pd.Series(True, index=df_clean.index, dtype=bool))
     else:
-        df_clean["_incluir"] = df_clean["_incluir"].astype(bool)
+        df_clean["_incluir"] = df_clean["_incluir"].fillna(True).astype(bool)
 
     # Limpiar y formatear fechas estrictamente sin hora (DD/MM/AAAA)
     for col in df_clean.columns:
@@ -164,6 +164,8 @@ def auto_calculate_dataframe(df: pd.DataFrame, calc_mode: str = "diario") -> pd.
         return df
 
     df_calc = df.copy()
+    if "_incluir" in df_calc.columns:
+        df_calc["_incluir"] = df_calc["_incluir"].fillna(True).astype(bool)
     for idx, row in df_calc.iterrows():
         # Días
         dias = parse_arg_number(row.get("DÍAS ALQ") or row.get("CANT DIAS") or row.get("DIAS") or 0)

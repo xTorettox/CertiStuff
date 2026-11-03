@@ -1,4 +1,7 @@
-import fitz # PyMuPDF
+try:
+    import pymupdf as fitz
+except ImportError:
+    import fitz # PyMuPDF fallback
 from typing import List
 
 def pdf_bytes_to_images(pdf_bytes: bytes, dpi: int = 150) -> List[bytes]:

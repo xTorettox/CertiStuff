@@ -150,7 +150,7 @@ def process_bulk_excel(
 
             # Preparar DataFrame de equipos para la plantilla correspondiente
             cert_df = group_df.copy()
-            cert_df["_incluir"] = True
+            cert_df["_incluir"] = pd.Series(True, index=cert_df.index, dtype=bool)
 
             # Nombres de columnas esperados según el generador
             if template_type == "nabors":
