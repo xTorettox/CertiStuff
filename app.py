@@ -15,9 +15,10 @@ from sullapps_ui import (
 )
 
 # Configuración de página Streamlit
+_CERTIFLOW_ICON = os.path.join(os.path.dirname(__file__), "assets", "logo_certiflow_mini.png")
 st.set_page_config(
-    page_title="Generador de Certificados | Sullair Argentina",
-    page_icon="📄",
+    page_title="CertiFlow | Generador de Certificados - Sullair Argentina",
+    page_icon=_CERTIFLOW_ICON if os.path.exists(_CERTIFLOW_ICON) else "📄",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -173,7 +174,11 @@ current_username = sso_identity.get("username", "fcendra")
 current_display_name = sso_identity.get("display_name") or current_username
 current_role_label = "Administrador" if sso_identity.get("role") == "admin" else "Usuario SullApps"
 
-# Barra lateral: Sesión activa SSO
+# Barra lateral: Logo CertiFlow + Sesión activa SSO
+_CERTIFLOW_FULL_LOGO = os.path.join(ASSETS_DIR, "logo_certiflow_full.png")
+if os.path.exists(_CERTIFLOW_FULL_LOGO):
+    st.sidebar.image(_CERTIFLOW_FULL_LOGO, width=210)
+
 st.sidebar.markdown(f"""
 <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-left: 4px solid #006837; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;">
     <div style="font-size: 0.72rem; color: #64748B; font-weight: 700; text-transform: uppercase;">Sesión SSO SullApps</div>
@@ -186,20 +191,22 @@ st.sidebar.markdown(f"""
 pm = ProfileManager()
 all_profiles = pm.list_profiles()
 
-# Encabezado corporativo con Logo Oficial Sullair
-col_head1, col_head2 = st.columns([3, 1.2])
+# Encabezado corporativo con Logo Oficial Sullair + CertiFlow
+col_head1, col_head2 = st.columns([3, 1.3])
 with col_head1:
     st.markdown("""
     <div class="main-header">
         <div>
-            <h1>📄 Generador de Certificados de Alquiler y Servicios</h1>
+            <h1>Generador de Certificados de Alquiler y Servicios</h1>
             <p>Emisión y Certificación PDF con Recorte Dinámico y Firma Digital | Sullair Argentina</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
 with col_head2:
+    if os.path.exists(_CERTIFLOW_FULL_LOGO):
+        st.image(_CERTIFLOW_FULL_LOGO, width=220)
     if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=230)
+        st.image(LOGO_PATH, width=180)
 
 # Tabs principales
 tab_cert, tab_bulk, tab_historial, tab_precios, tab_firma, tab_perfiles, tab_ayuda = st.tabs([
