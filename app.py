@@ -5,6 +5,14 @@ import datetime
 import streamlit as st
 import pandas as pd
 from PIL import Image
+from sullapps_ui import (
+    inject_custom_css,
+    sullapps_spinner,
+    celebrate_success,
+    verify_sullapps_sso,
+    render_sullapps_portal_notice,
+    clear_sullapps_sso,
+)
 
 # Configuración de página Streamlit
 st.set_page_config(
@@ -13,6 +21,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+inject_custom_css()
 
 # Importar módulos del sistema
 from utils.auth import check_authentication, render_user_sidebar
@@ -44,15 +53,22 @@ CUSTOM_SIG_PATH = os.path.join(ASSETS_DIR, "firma_subida.png")
 DEFAULT_SIG_PATH = os.path.join(ASSETS_DIR, "firma_default.png")
 LOGO_PATH = os.path.join(ASSETS_DIR, "logo_sullair.png")
 
-# --- CONTROL DE ACCESO / LOGIN (Secrets) ---
-if not check_authentication():
+# --- CONTROL DE ACCESO UNIFICADO SULLAPPS SSO ---
+sso_identity = verify_sullapps_sso()
+if not sso_identity:
+    render_sullapps_portal_notice(app_slug="certiflow")
     st.stop()
+
+st.session_state["authenticated"] = True
+st.session_state["username"] = sso_identity.get("username", "fcendra")
+st.session_state["user_display_name"] = sso_identity.get("display_name") or st.session_state["username"]
+st.session_state["user_role"] = sso_identity.get("role", "user")
 
 # CSS personalizado para estilo corporativo de alto impacto
 st.markdown("""
 <style>
     .main-header {
-        background: linear-gradient(135deg, #00853E 0%, #065F2C 100%);
+        background: linear-gradient(135deg, #006837 0%, #004D28 100%);
         color: white;
         padding: 16px 24px;
         border-radius: 12px;
@@ -60,7 +76,7 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: space-between;
-        box-shadow: 0 4px 14px rgba(0, 133, 62, 0.2);
+        box-shadow: 0 4px 14px rgba(0, 104, 55, 0.2);
     }
     .main-header h1 {
         color: white !important;
@@ -75,33 +91,34 @@ st.markdown("""
         margin: 3px 0 0 0 !important;
     }
     .stat-card {
-        background: white;
+        background: #FFFFFF;
         border: 1px solid #E2E8F0;
-        border-left: 5px solid #00853E;
+        border-left: 5px solid #006837;
         border-radius: 10px;
-        padding: 12px 16px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+        padding: 14px 18px;
+        margin: 8px 0 14px 0;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
     }
     .stat-label {
         color: #64748B;
-        font-size: 0.76rem;
-        font-weight: 600;
+        font-size: 0.74rem;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.6px;
     }
     .stat-value {
         color: #0F172A;
-        font-size: 1.35rem;
+        font-size: 1.32rem;
         font-weight: 700;
-        margin-top: 3px;
+        margin-top: 4px;
     }
     .badge-client {
         background: #DCFCE7;
-        color: #166534;
-        padding: 4px 10px;
+        color: #006837;
+        padding: 4px 11px;
         border-radius: 20px;
         font-size: 0.75rem;
-        font-weight: 600;
+        font-weight: 700;
         display: inline-block;
     }
     .empty-state-box {
@@ -112,15 +129,58 @@ st.markdown("""
         text-align: center;
         margin: 16px 0;
     }
+    div[data-testid="stDataEditor"] {
+        margin: 8px 0 16px 0 !important;
+    }
+    .preview-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-top: 12px;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    }
+    .preview-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 14px;
+        border-bottom: 1px solid #E2E8F0;
+    }
+    .preview-card-title {
+        font-size: 1.02rem;
+        font-weight: 700;
+        color: #0F172A;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .preview-badge {
+        background: #E6F4EA;
+        color: #006837;
+        border: 1px solid #BBF7D0;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Usuario activo en sesión
-current_username = st.session_state.get("username", "fcendra")
-current_display_name = st.session_state.get("user_display_name", "Federico García Cendra")
+# Usuario activo en sesión (SSO SullApps)
+current_username = sso_identity.get("username", "fcendra")
+current_display_name = sso_identity.get("display_name") or current_username
+current_role_label = "Administrador" if sso_identity.get("role") == "admin" else "Usuario SullApps"
 
-# Barra lateral: Sesión activa
-render_user_sidebar()
+# Barra lateral: Sesión activa SSO
+st.sidebar.markdown(f"""
+<div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-left: 4px solid #006837; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;">
+    <div style="font-size: 0.72rem; color: #64748B; font-weight: 700; text-transform: uppercase;">Sesión SSO SullApps</div>
+    <div style="font-size: 0.95rem; font-weight: 700; color: #0F172A; margin-top: 2px;">👤 {current_display_name}</div>
+    <div style="font-size: 0.76rem; color: #006837; font-weight: 600;">@{current_username} · {current_role_label}</div>
+</div>
+""", unsafe_allow_html=True)
 
 # Inicializar gestor de perfiles
 pm = ProfileManager()
@@ -507,8 +567,19 @@ with tab_cert:
                         "items": edited_df.to_dict(orient="records")
                     })
 
-            # Previsualización gráfica en vivo
-            st.markdown("### 👁️ Vista Previa del Certificado (Recorte Automático)")
+            # Previsualización gráfica en vivo (Tarjeta pulida)
+            st.markdown(f"""
+            <div class="preview-card">
+                <div class="preview-card-header">
+                    <div class="preview-card-title">👁️ Vista Previa en Vivo del Certificado</div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <span class="preview-badge">{cliente_actual.get('nombre')}</span>
+                        <span class="preview-badge">Certificado #{cert_id}</span>
+                        <span class="preview-badge">Recorte Dinámico Activo</span>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             preview_images = pdf_bytes_to_images(pdf_bytes, dpi=160)
             if preview_images:
                 for idx, img_bytes in enumerate(preview_images):
@@ -556,7 +627,7 @@ with tab_bulk:
             st.dataframe(df_preview_bulk.head(15), use_container_width=True)
 
             if st.button("🚀 Procesar Certificados y Generar ZIP", type="primary", use_container_width=True):
-                with st.spinner("Generando certificados PDF y empaquetando en ZIP..."):
+                with sullapps_spinner("reports"):
                     uploaded_bulk.seek(0)
                     bulk_options = {
                         "show_dates": show_dates,
@@ -576,7 +647,7 @@ with tab_bulk:
                         options=bulk_options
                     )
 
-                st.success(f"🎉 Proceso completado: se generaron **{len(summary)} certificados** exitosamente.")
+                celebrate_success(f"¡Proceso completado! Se generaron {len(summary)} certificados exitosamente.")
                 
                 # Tabla de resumen
                 st.dataframe(pd.DataFrame(summary), use_container_width=True)
